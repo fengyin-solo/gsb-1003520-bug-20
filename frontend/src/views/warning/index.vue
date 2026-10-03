@@ -77,6 +77,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  moduleMetrics,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,7 +86,11 @@ const meta = moduleMeta('warning')
 const columns = ["配置编号", "站点编号", "监测类型", "蓝色阈值", "黄色阈值", "橙色阈值", "红色阈值", "生效状态"]
 const actions = ["发布生效", "调整阈值", "停用配置"]
 const statuses = ["草稿", "已生效", "已调整", "已停用"]
-const stats = [{"label": "配置总数", "value": 0}, {"label": "已生效数", "value": 0}, {"label": "本月调整数", "value": 0}]
+const dataVersion = ref(0)
+const stats = computed(() => {
+  void dataVersion.value // 与列表同源：reload 后强制重算卡片
+  return moduleMetrics(meta.key)
+})
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -125,6 +130,7 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    dataVersion.value += 1
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total

@@ -77,6 +77,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  moduleMetrics,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,7 +86,11 @@ const meta = moduleMeta('waterquality')
 const columns = ["报告编号", "采样站点", "采样时间", "检测项目", "检测值", "标准上限", "检测人", "报告状态"]
 const actions = ["开始检测", "出具报告", "发起复核"]
 const statuses = ["已采样", "检测中", "已出报告", "超标", "已复核"]
-const stats = [{"label": "本月检测次数", "value": 0}, {"label": "超标报告数", "value": 0}, {"label": "检测中样本", "value": 0}]
+const dataVersion = ref(0)
+const stats = computed(() => {
+  void dataVersion.value // 与列表同源：reload 后强制重算卡片
+  return moduleMetrics(meta.key)
+})
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -125,6 +130,7 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    dataVersion.value += 1
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total

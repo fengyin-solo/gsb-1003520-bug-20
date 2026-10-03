@@ -77,6 +77,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  moduleMetrics,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,7 +86,11 @@ const meta = moduleMeta('stationhouse')
 const columns = ["记录编号", "站点编号", "维护类型", "维护内容", "维护单位", "维护日期", "费用支出", "维护状态"]
 const actions = ["安排维护", "确认完工", "通过验收"]
 const statuses = ["待安排", "已安排", "施工中", "已完成", "已验收"]
-const stats = [{"label": "待维护项数", "value": 0}, {"label": "施工中项数", "value": 0}, {"label": "本月已验收", "value": 0}]
+const dataVersion = ref(0)
+const stats = computed(() => {
+  void dataVersion.value // 与列表同源：reload 后强制重算卡片
+  return moduleMetrics(meta.key)
+})
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -125,6 +130,7 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    dataVersion.value += 1
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total

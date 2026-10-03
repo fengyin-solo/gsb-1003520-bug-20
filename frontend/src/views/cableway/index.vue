@@ -77,6 +77,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  moduleMetrics,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,7 +86,11 @@ const meta = moduleMeta('cableway')
 const columns = ["缆道编号", "所属站点", "跨度米数", "建成日期", "最近检修日", "荷载能力", "检修人员", "缆道状态"]
 const actions = ["安排检修", "完成检修", "停用缆道"]
 const statuses = ["正常运行", "需检修", "检修中", "已停用"]
-const stats = [{"label": "缆道总数", "value": 0}, {"label": "正常运行数", "value": 0}, {"label": "需检修数", "value": 0}]
+const dataVersion = ref(0)
+const stats = computed(() => {
+  void dataVersion.value // 与列表同源：reload 后强制重算卡片
+  return moduleMetrics(meta.key)
+})
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -125,6 +130,7 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    dataVersion.value += 1
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total

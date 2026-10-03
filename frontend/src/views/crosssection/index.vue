@@ -77,6 +77,7 @@ import {
   downloadEntries,
   listEntries,
   moduleMeta,
+  moduleMetrics,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,7 +86,11 @@ const meta = moduleMeta('crosssection')
 const columns = ["记录编号", "站点编号", "断面名称", "测量方法", "起点距", "河底高程", "测量日期", "记录状态"]
 const actions = ["提交校核", "确认校核", "安排重测"]
 const statuses = ["已测量", "待校核", "已校核", "需重测"]
-const stats = [{"label": "本月测量次数", "value": 0}, {"label": "待校核记录", "value": 0}, {"label": "需重测记录", "value": 0}]
+const dataVersion = ref(0)
+const stats = computed(() => {
+  void dataVersion.value // 与列表同源：reload 后强制重算卡片
+  return moduleMetrics(meta.key)
+})
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -125,6 +130,7 @@ function runAction(action: string, row: EntryRow) {
 function reload() {
   errorMessage.value = ''
   try {
+    dataVersion.value += 1
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total

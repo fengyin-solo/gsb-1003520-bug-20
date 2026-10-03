@@ -1,7 +1,186 @@
-import type { ModuleMeta } from './types'
+import type { MetricRule, ModuleMeta } from './types'
+
+// 各模块的状态语义与指标取数口径集中在这里：
+// closedStatuses   终态（不算待处理、进入归档清单）：健康稳定态、正常办结态、撤销/停用/驳回/废止等反向结局态
+// abnormalStatuses 异常态（算异常量，处置完成即移出）：故障类过程态与反向结局态
+// metricRules      与 metrics 一一对应的统计口径，空 statuses 表示全量
+// 统一口径：仍需人工处理的在途/故障态为待处理；撤销、停用、驳回、废止等结局态不再算待处理。
+type ModuleRule = {
+  closedStatuses: string[]
+  abnormalStatuses: string[]
+  metricRules: MetricRule[]
+}
+
+// 采集/审核类模块共用的一组状态：异常值仍需人工复核修正，所以只把「已通过」当办结。
+const REVIEW_STATUS_RULE: Pick<ModuleRule, 'closedStatuses' | 'abnormalStatuses'> = {
+  closedStatuses: ['已通过'],
+  abnormalStatuses: ['异常值'],
+}
+
+const MODULE_RULES: Record<string, ModuleRule> = {
+  station: {
+    closedStatuses: ['正常运行', '汛期加强', '暂停运行', '已撤销'],
+    abnormalStatuses: ['设备故障', '已撤销'],
+    metricRules: [
+      { label: '站点总数', statuses: [] },
+      { label: '正常运行数', statuses: ['正常运行'] },
+      { label: '故障站点数', statuses: ['设备故障'] },
+    ],
+  },
+  waterlevel: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '今日采集数', statuses: [] },
+      { label: '超警戒站次', statuses: ['异常值'] },
+      { label: '待审核记录', statuses: ['待审核'] },
+    ],
+  },
+  discharge: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '今日测量次数', statuses: [] },
+      { label: '待审核记录', statuses: ['待审核'] },
+      { label: '异常记录数', statuses: ['异常值'] },
+    ],
+  },
+  rainfall: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '今日观测站次', statuses: [] },
+      { label: '暴雨站点数', statuses: ['异常值'] },
+      { label: '待审核记录', statuses: ['待审核'] },
+    ],
+  },
+  waterquality: {
+    closedStatuses: ['已出报告', '已复核'],
+    abnormalStatuses: ['超标'],
+    metricRules: [
+      { label: '本月检测次数', statuses: [] },
+      { label: '超标报告数', statuses: ['超标'] },
+      { label: '检测中样本', statuses: ['检测中'] },
+    ],
+  },
+  crosssection: {
+    closedStatuses: ['已校核'],
+    abnormalStatuses: ['需重测'],
+    metricRules: [
+      { label: '本月测量次数', statuses: [] },
+      { label: '待校核记录', statuses: ['待校核'] },
+      { label: '需重测记录', statuses: ['需重测'] },
+    ],
+  },
+  telemetry: {
+    closedStatuses: ['正常运行', '已停用'],
+    abnormalStatuses: ['信号异常', '低电量', '待维修', '已停用'],
+    metricRules: [
+      { label: '设备总数', statuses: [] },
+      { label: '正常运行数', statuses: ['正常运行'] },
+      { label: '待维修数', statuses: ['待维修'] },
+    ],
+  },
+  compilation: {
+    closedStatuses: ['已刊印', '已驳回'],
+    abnormalStatuses: ['已驳回'],
+    metricRules: [
+      { label: '待整编年度', statuses: ['待整编'] },
+      { label: '整编中年度', statuses: ['整编中'] },
+      { label: '已刊印成果', statuses: ['已刊印'] },
+    ],
+  },
+  warning: {
+    closedStatuses: ['已生效', '已调整', '已停用'],
+    abnormalStatuses: ['已停用'],
+    metricRules: [
+      { label: '配置总数', statuses: [] },
+      { label: '已生效数', statuses: ['已生效'] },
+      { label: '本月调整数', statuses: ['已调整'] },
+    ],
+  },
+  groundwater: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '今日观测井次', statuses: [] },
+      { label: '待审核记录', statuses: ['待审核'] },
+      { label: '异常记录数', statuses: ['异常值'] },
+    ],
+  },
+  evaporation: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '今日观测站次', statuses: [] },
+      { label: '待审核记录', statuses: ['待审核'] },
+      { label: '异常记录数', statuses: ['异常值'] },
+    ],
+  },
+  cableway: {
+    closedStatuses: ['正常运行', '已停用'],
+    abnormalStatuses: ['需检修', '检修中', '已停用'],
+    metricRules: [
+      { label: '缆道总数', statuses: [] },
+      { label: '正常运行数', statuses: ['正常运行'] },
+      { label: '需检修数', statuses: ['需检修'] },
+    ],
+  },
+  sediment: {
+    ...REVIEW_STATUS_RULE,
+    metricRules: [
+      { label: '本月采样次数', statuses: [] },
+      { label: '待审核记录', statuses: ['待审核'] },
+      { label: '异常记录数', statuses: ['异常值'] },
+    ],
+  },
+  communication: {
+    closedStatuses: ['通讯正常'],
+    abnormalStatuses: ['信号弱', '通讯中断', '待更换'],
+    metricRules: [
+      { label: '设备总数', statuses: [] },
+      { label: '通讯正常数', statuses: ['通讯正常'] },
+      { label: '中断设备数', statuses: ['通讯中断'] },
+    ],
+  },
+  stationhouse: {
+    closedStatuses: ['已完成', '已验收'],
+    abnormalStatuses: [],
+    metricRules: [
+      { label: '待维护项数', statuses: ['待安排'] },
+      { label: '施工中项数', statuses: ['施工中'] },
+      { label: '本月已验收', statuses: ['已验收'] },
+    ],
+  },
+  calibration: {
+    closedStatuses: ['已合格', '不合格', '已停用'],
+    abnormalStatuses: ['不合格', '已停用'],
+    metricRules: [
+      { label: '待送检仪器', statuses: ['待送检'] },
+      { label: '已合格仪器', statuses: ['已合格'] },
+      { label: '不合格仪器', statuses: ['不合格'] },
+    ],
+  },
+  inspection: {
+    // 发现故障后仍待处置：处置完成才办结归档，异常也随之消除。
+    closedStatuses: ['已处置'],
+    abnormalStatuses: ['发现故障'],
+    metricRules: [
+      { label: '本月巡检次数', statuses: [] },
+      { label: '已巡检站点', statuses: ['已巡检'] },
+      { label: '待处置故障', statuses: ['发现故障'] },
+    ],
+  },
+  plan: {
+    closedStatuses: ['已批准', '已废止'],
+    abnormalStatuses: ['已废止'],
+    metricRules: [
+      { label: '方案总数', statuses: [] },
+      { label: '已批准方案', statuses: ['已批准'] },
+      { label: '待审批方案', statuses: ['待审批'] },
+    ],
+  },
+}
 
 // 模块元数据由仓库生成时写入：字段、状态、动作、流转目标都在这里，页面不再各自写一遍。
-export const MODULES: ModuleMeta[] = [
+type RawModuleMeta = Omit<ModuleMeta, 'closedStatuses' | 'abnormalStatuses' | 'metricRules'>
+
+const RAW_MODULES: RawModuleMeta[] = [
   {
     key: "station",
     name: "监测站点",
@@ -201,6 +380,17 @@ export const MODULES: ModuleMeta[] = [
     metrics: ["方案总数", "已批准方案", "待审批方案"],
   },
 ]
+
+// 把状态语义和指标口径合并进模块元数据，页面与服务只消费合并后的 MODULES。
+export const MODULES: ModuleMeta[] = RAW_MODULES.map((item) => {
+  const rule = MODULE_RULES[item.key]
+  return {
+    ...item,
+    closedStatuses: rule.closedStatuses,
+    abnormalStatuses: rule.abnormalStatuses,
+    metricRules: rule.metricRules,
+  }
+})
 
 export const MODULE_BY_KEY: Map<string, ModuleMeta> = new Map(
   MODULES.map((item) => [item.key, item]),
