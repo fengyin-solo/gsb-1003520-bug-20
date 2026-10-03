@@ -18,6 +18,10 @@ export type ModuleMeta = {
   actions: string[]
   actionTargets: Record<string, string>
   metrics: string[]
+  // 已办结（归档）状态：进入即离开待处理队列，进入归档清单；离开则回到在办。
+  closedStatuses: string[]
+  // 异常状态：当前处于故障/异常/反向终态等需要关注的状态，处置完成后必须能清零。
+  abnormalStatuses: string[]
 }
 
 export type PageResult = {
@@ -35,4 +39,20 @@ export type ActionResult = {
 export type OverviewResult = {
   cards: { label: string; value: number }[]
   modules: { name: string; created: number; pending: number; abnormal: number }[]
+}
+
+// 归档清单中的一条：同一业务记录（模块 + id）在清单里永远只有一条，随最新结果原地更新。
+export type ArchiveEntry = {
+  module: string
+  id: number
+  status: string
+  abnormal: boolean
+  action: string
+  archivedAt: string
+  row: EntryRow
+}
+
+export type ArchivePageResult = {
+  items: ArchiveEntry[]
+  total: number
 }

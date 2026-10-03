@@ -1,9 +1,13 @@
 import { MODULE_BY_KEY } from '@/data/modules'
-import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
-import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
-
-// 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
-const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
+import { commitRows, getState, listRows, resetRows, subscribe } from '@/data/local-store'
+import type {
+  ActionResult,
+  ArchivePageResult,
+  EntryRow,
+  ModuleMeta,
+  OverviewResult,
+  PageResult,
+} from '@/data/types'
 
 export function moduleMeta(key: string): ModuleMeta {
   const meta = MODULE_BY_KEY.get(key)
@@ -43,22 +47,42 @@ export function runAction(key: string, id: number, action: string): ActionResult
   if (current === target) {
     return { ok: false, message: `${meta.entity}已经是「${target}」，不用重复操作` }
   }
-  const lastStatus = meta.statuses[meta.statuses.length - 1]
-  const updated: EntryRow = {
-    ...rows[index],
-    status: target,
-    pending: target !== lastStatus,
-    abnormal: NEGATIVE_ACTIONS.some((verb) => action.startsWith(verb)),
-  }
+  // pending / abnormal 不再由动作名推断，只写状态，标记在事务提交时按统一口径从状态派生。
+  // 同一记录连续动作：若状态没有变化，这里直接短路（幂等，只计一次）。
+  const updated: EntryRow = { ...rows[index], status: target }
   const next = [...rows]
   next[index] = updated
-  saveRows(key, next)
+  try {
+    // 行、归档清单、总览快照在同一个事务里提交：任一汇总/对账失败三处一起回退。
+    commitRows(key, next, { id, action })
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : `${meta.entity}处置失败，已回退`,
+    }
+  }
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 
 export function resetModule(key: string): PageResult {
   resetRows(key)
   return listEntries(key)
+}
+
+export function listArchive(moduleKey: string = ''): ArchivePageResult {
+  const items = getState().archive.filter(
+    (entry) => moduleKey === '' || entry.module === moduleKey,
+  )
+  return { items, total: items.length }
+}
+
+// 总览与列表、归档读的是同一事务提交后的状态快照，保证三处数字对得上。
+export function loadOverview(): OverviewResult {
+  return getState().overview
+}
+
+export function onStoreChange(listener: () => void): () => void {
+  return subscribe(listener)
 }
 
 export function exportEntries(key: string): { filename: string; content: string } {
@@ -68,7 +92,7 @@ export function exportEntries(key: string): { filename: string; content: string 
   for (const row of listRows(key)) {
     lines.push([row.id, ...meta.fields.map((field) => row[field] ?? ''), row.status].join(','))
   }
-  return { filename: `${meta.name}-清单.csv`, content: `\uFEFF${lines.join('\n')}` }
+  return { filename: `${meta.name}-清单.csv`, content: `﻿${lines.join('\n')}` }
 }
 
 export function downloadEntries(key: string): void {
@@ -82,24 +106,4 @@ export function downloadEntries(key: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
-}
-
-export function loadOverview(): OverviewResult {
-  const rows = allRows()
-  const modules = [...MODULE_BY_KEY.values()].map((meta) => {
-    const entries = rows[meta.key] ?? []
-    return {
-      name: meta.name,
-      created: entries.length,
-      pending: entries.filter((row) => row.pending).length,
-      abnormal: entries.filter((row) => row.abnormal).length,
-    }
-  })
-  const cards = [
-    { label: '业务模块', value: modules.length },
-    { label: '登记总量', value: modules.reduce((sum, item) => sum + item.created, 0) },
-    { label: '待处理', value: modules.reduce((sum, item) => sum + item.pending, 0) },
-    { label: '异常量', value: modules.reduce((sum, item) => sum + item.abnormal, 0) },
-  ]
-  return { cards, modules }
 }

@@ -35,9 +35,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
-import { loadOverview } from '@/api/local-service'
+import { loadOverview, onStoreChange } from '@/api/local-service'
 import type { OverviewResult } from '@/data/types'
 
 const cards = ref<OverviewResult['cards']>([])
@@ -49,5 +49,15 @@ function refresh() {
   moduleRows.value = payload.modules
 }
 
-onMounted(refresh)
+let unsubscribe: (() => void) | null = null
+
+onMounted(() => {
+  refresh()
+  // 任一模块动作提交成功后，总览随同一事务结果即时刷新。
+  unsubscribe = onStoreChange(refresh)
+})
+
+onUnmounted(() => {
+  unsubscribe?.()
+})
 </script>
